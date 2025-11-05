@@ -34,43 +34,67 @@ class ProfessionalsService {
   }
 
   // ✅ Obtener profesionales del usuario autenticado
-  Stream<List<Professional>> getProfessionals() {
+  // En lib/services/profecinal_service.dart
+
+  // En lib/services/profecinal_service.dart
+
+  // Em lib/services/profecinal_service.dart
+
+  // En lib/services/profecinal_service.dart
+
+  Stream<List<Professional>> getProfessionals({String? branchId}) {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) {
-      print('⚠️ No hay usuario autenticado. Retornando Stream vacío.');
       return const Stream.empty();
     }
+    final ownerId = currentUser.uid;
 
-    return _professionalsRef
-        .where('companyId', isEqualTo: currentUser.uid)
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snapshot) {
-          print(
-            '📦 PROFESIONALES (${currentUser.uid}): ${snapshot.docs.length} encontrados.',
+    // 1. Inicia la consulta con el filtro obligatorio del dueño
+    Query query = _professionalsRef.where('companyId', isEqualTo: ownerId);
+
+    // 🔍 LOG EXPLICITO (INICIO)
+    print('--- INICIANDO CONSULTA DE PROFESIONALES ---');
+    print('   - Buscando por Dueño (companyId): $ownerId');
+
+    // 2. Aplicar el filtro opcional de sede (branchId)
+    if (branchId != null && branchId.isNotEmpty) {
+      query = query.where('branchId', isEqualTo: branchId);
+      print(
+        '   - Y por Sede (branchId): $branchId',
+      ); // ⬅️ ID de Sede usado en el filtro
+    } else {
+      print('   - SIN FILTRO POR SEDE (branchId).');
+    }
+
+    // 3. Ejecutar la consulta sin ordenación (para evitar el índice de 3 campos)
+    return query.snapshots().map((snapshot) {
+      print(
+        '📦 PROFESIONALES (RESULTADO FINAL): ${snapshot.docs.length} encontrados.',
+      );
+      print('-------------------------------------------');
+
+      return snapshot.docs.map((doc) {
+        try {
+          return Professional.fromMap(
+            doc.id,
+            doc.data() as Map<String, dynamic>,
           );
-
-          return snapshot.docs.map((doc) {
-            try {
-              return Professional.fromMap(
-                doc.id,
-                doc.data() as Map<String, dynamic>,
-              );
-            } catch (e, st) {
-              print('❌ Error al mapear profesional (${doc.id}): $e');
-              print(st);
-              return Professional(
-                id: doc.id,
-                name: 'Error',
-                email: '',
-                phone: '',
-                role: '',
-                services: [],
-                companyId: '',
-              );
-            }
-          }).toList();
-        });
+        } catch (e, st) {
+          print('❌ Error al mapear profesional (${doc.id}): $e');
+          print(st);
+          return Professional(
+            id: doc.id,
+            name: 'Error',
+            email: '',
+            phone: '',
+            role: '',
+            services: [],
+            companyId: '',
+            branchId: '',
+          );
+        }
+      }).toList();
+    });
   }
 
   // ✅ Actualizar profesional

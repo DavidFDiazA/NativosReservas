@@ -8,6 +8,7 @@ class Professional {
   final String role;
   final List<String> services;
   final String companyId;
+  final String branchId;
 
   Professional({
     required this.id,
@@ -17,6 +18,7 @@ class Professional {
     required this.role,
     required this.services,
     required this.companyId,
+    required this.branchId,
   });
 
   // ✅ Convertir modelo a mapa (para subir a Firestore)
@@ -30,6 +32,7 @@ class Professional {
       'services': services,
       'companyId': companyId,
       'createdAt': FieldValue.serverTimestamp(),
+      'branchId': branchId,
     };
   }
 
@@ -43,6 +46,7 @@ class Professional {
       role: data['role'] ?? '',
       services: List<String>.from(data['services'] ?? []),
       companyId: data['companyId'] ?? '',
+      branchId: data['branchId'] ?? '',
     );
   }
 }

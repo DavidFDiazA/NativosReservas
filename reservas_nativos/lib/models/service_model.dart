@@ -5,6 +5,7 @@ class SalonService {
   final int duration; // minutos
   final String professionalId;
   final String companyId;
+  final String branchId;
 
   SalonService({
     required this.id,
@@ -13,6 +14,7 @@ class SalonService {
     required this.duration,
     required this.professionalId,
     required this.companyId,
+    required this.branchId,
   });
 
   Map<String, dynamic> toMap() {
@@ -33,6 +35,7 @@ class SalonService {
       duration: data['duration'] ?? 0,
       professionalId: data['professionalId'] ?? '',
       companyId: data['companyId'] ?? '',
+      branchId: data['branchId'] ?? '',
     );
   }
 }
