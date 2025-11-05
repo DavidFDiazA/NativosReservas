@@ -1,0 +1,41 @@
+{
+    "flutter": {
+        "platforms": {
+            "android": {
+                "default": {
+                    "projectId": "reservas-nativos",
+                    "appId": "1:303448519859:android:acc5da04b73f1f8581ecc6",
+                    "fileOutput": "android/app/google-services.json"
+                }
+            },
+            "ios": {
+                "default": {
+                    "projectId": "reservas-nativos",
+                    "appId": "1:303448519859:ios:b5e9c9de0cff14c581ecc6",
+                    "uploadDebugSymbols": false,
+                    "fileOutput": "ios/Runner/GoogleService-Info.plist"
+                }
+            },
+            "macos": {
+                "default": {
+                    "projectId": "reservas-nativos",
+                    "appId": "1:303448519859:ios:b5e9c9de0cff14c581ecc6",
+                    "uploadDebugSymbols": false,
+                    "fileOutput": "macos/Runner/GoogleService-Info.plist"
+                }
+            },
+            "dart": {
+                "lib/firebase_options.dart": {
+                    "projectId": "reservas-nativos",
+                    "configurations": {
+                        "android": "1:303448519859:android:acc5da04b73f1f8581ecc6",
+                        "ios": "1:303448519859:ios:b5e9c9de0cff14c581ecc6",
+                        "macos": "1:303448519859:ios:b5e9c9de0cff14c581ecc6",
+                        "web": "1:303448519859:web:9c199430f208aac381ecc6",
+                        "windows": "1:303448519859:web:103288742d930b9181ecc6"
+                    }
+                }
+            }
+        }
+    }
+}

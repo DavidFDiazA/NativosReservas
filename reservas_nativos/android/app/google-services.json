@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "303448519859",
+    "project_id": "reservas-nativos",
+    "storage_bucket": "reservas-nativos.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:303448519859:android:acc5da04b73f1f8581ecc6",
+        "android_client_info": {
+          "package_name": "com.example.reservas_nativos"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA1VSpAAFyW-1Q9csk692BxTW3QsgoaG_A"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
