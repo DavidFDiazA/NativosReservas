@@ -1,17 +1,15 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/service_model.dart';
-// import 'profecinal_service.dart'; // No es necesario si solo usamos la referencia de colección
 
 class SalonServicesService {
   final CollectionReference _servicesRef = FirebaseFirestore.instance
       .collection('salon_services');
 
-  // ⬅️ Se añade la referencia a profesionales para poder actualizar el listado de servicios
   final CollectionReference _professionalsRef = FirebaseFirestore.instance
       .collection('professionals');
 
-  // ✅ Crear servicio (asociado al usuario autenticado)
+  // ✅ Crear servicio
   Future<void> addService(SalonService service) async {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) {
@@ -22,7 +20,6 @@ class SalonServicesService {
       final docRef = _servicesRef.doc();
       final serviceId = docRef.id;
 
-      // 1. Crear el mapa de datos. service.toMap() ahora incluye branchId
       final data = {
         ...service.toMap(),
         'id': serviceId,
@@ -30,21 +27,11 @@ class SalonServicesService {
         'createdAt': FieldValue.serverTimestamp(),
       };
 
-      // 2. Guardar el nuevo servicio en la colección salon_services
       await docRef.set(data);
-      print(
-        '✅ Servicio guardado correctamente con id: $serviceId en sede ${service.branchId}',
-      );
 
-      // 3. Actualizar la lista de servicios en el documento del profesional
       await _professionalsRef.doc(service.professionalId).update({
-        'services': FieldValue.arrayUnion([
-          serviceId,
-        ]), // Agrega el ID del servicio
+        'services': FieldValue.arrayUnion([serviceId]),
       });
-      print(
-        '✅ Profesional ${service.professionalId} actualizado con el servicio $serviceId',
-      );
     } catch (e, st) {
       print('❌ Error al guardar servicio: $e');
       print(st);
@@ -52,7 +39,45 @@ class SalonServicesService {
     }
   }
 
-  // ✅ Obtener servicios del usuario autenticado
+  // 🟢 MÉTODO CORREGIDO: Obtener servicios filtrados por Sede (Branch)
+  Stream<List<SalonService>> getServicesByBranch(String branchId) {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      return const Stream.empty();
+    }
+
+    return _servicesRef
+        .where('companyId', isEqualTo: currentUser.uid)
+        .where('branchId', isEqualTo: branchId)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs.map((doc) {
+            try {
+              return SalonService.fromMap(
+                doc.id,
+                doc.data() as Map<String, dynamic>,
+              );
+            } catch (e) {
+              print('Error mapeando servicio: $e');
+              return SalonService(
+                id: doc.id,
+                name: 'Error',
+                price: 0,
+                duration: 0,
+                professionalId: '',
+                companyId: '',
+                branchId: '',
+              );
+            }
+          }).toList(),
+        );
+  }
+
+  // Métodos de servicio restantes...
+  // (getServices, getServicesByProfessional, updateService, deleteService)
+  // ... (mantén estos métodos como los tenías en tu archivo original)
+
+  // ✅ Obtener servicios del usuario autenticado (Todos)
   Stream<List<SalonService>> getServices() {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) {
@@ -85,7 +110,7 @@ class SalonServicesService {
                 duration: 0,
                 professionalId: '',
                 companyId: '',
-                branchId: '', // Campo añadido al modelo
+                branchId: '',
               );
             }
           }).toList();
@@ -99,7 +124,6 @@ class SalonServicesService {
       return const Stream.empty();
     }
 
-    // Esta consulta ya es eficiente porque la lista de profesionales en SalonScreen ya está filtrada por sede.
     return _servicesRef
         .where('companyId', isEqualTo: currentUser.uid)
         .where('professionalId', isEqualTo: professionalId)
@@ -120,7 +144,7 @@ class SalonServicesService {
                 duration: 0,
                 professionalId: '',
                 companyId: '',
-                branchId: '', // Campo añadido al modelo
+                branchId: '',
               );
             }
           }).toList(),

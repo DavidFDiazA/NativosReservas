@@ -1,6 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
+// Importaciones de Modelos y Servicios
+import 'package:reservas_nativos/models/branch_model.dart';
+import 'package:reservas_nativos/models/profecionales_models.dart';
+import 'package:reservas_nativos/models/service_model.dart';
+import 'package:reservas_nativos/services/branch_service.dart';
+import 'package:reservas_nativos/services/profecinal_service.dart';
+import 'package:reservas_nativos/services/salon_services.dart';
+import '../models/appointment_model.dart';
+import '../services/appointments_service.dart';
 
 class AgendaScreen extends StatefulWidget {
   const AgendaScreen({Key? key}) : super(key: key);
@@ -10,87 +19,336 @@ class AgendaScreen extends StatefulWidget {
 }
 
 class _AgendaScreenState extends State<AgendaScreen> {
+  // ----------------------------------------------------
+  // SERVICIOS
+  // ----------------------------------------------------
+  final AppointmentsService _appointmentsService = AppointmentsService();
+  final BranchesService _branchService = BranchesService();
+  final SalonServicesService _servService = SalonServicesService();
+  final ProfessionalsService _profService = ProfessionalsService();
+
+  // ----------------------------------------------------
+  // CONSTANTES DE COLOR
+  // ----------------------------------------------------
+  static const Color _PRIMARY_DARK = Color(0xFF334257);
+  static const Color _ACCENT_COLOR = Color(0xFF548CA8);
+  static const Color _CARD_BACKGROUND = Color(0xFF476072);
+  static const Color _APPBAR_BACKGROUND = Color(0xFFEEEEEE);
+  static const Color _MAIN_BACKGROUND = Colors.white;
+  static const Color _TEXT_COLOR_LIGHT = Colors.white;
+  static const Color _TEXT_COLOR_DARK = Color(0xFF334257);
+  // ----------------------------------------------------
+
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
 
-  // Lista temporal de citas
-  final Map<DateTime, List<Map<String, dynamic>>> _appointments = {};
-
-  List<Map<String, dynamic>> get _selectedAppointments {
-    return _appointments[_selectedDay] ?? [];
+  Stream<List<Appointment>> get _selectedAppointmentsStream {
+    final day = _selectedDay ?? _focusedDay;
+    return _appointmentsService.getAppointmentsForDay(day);
   }
 
-  void _addAppointment(BuildContext context) async {
-    final TextEditingController titleController = TextEditingController();
-    final TextEditingController hourController = TextEditingController();
+  void _updateAppointmentStatus(String appointmentId, String status) async {
+    try {
+      await _appointmentsService.updateStatus(appointmentId, status);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al actualizar estado: $e')),
+        );
+      }
+    }
+  }
 
-    await showDialog(
+  // FUNCIÓN: Muestra TimePicker en formato 24h
+  Future<TimeOfDay?> _selectTime(BuildContext context) async {
+    return await showTimePicker(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        backgroundColor: Colors.white,
-        title: const Text(
-          'Agregar cita manual',
-          style: TextStyle(
-            color: Color(0xFF6C63FF),
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: titleController,
-              decoration: const InputDecoration(
-                labelText: 'Título',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: hourController,
-              decoration: const InputDecoration(
-                labelText: 'Hora (Ej: 10:00 AM)',
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF6C63FF),
-            ),
-            onPressed: () {
-              if (titleController.text.isNotEmpty &&
-                  hourController.text.isNotEmpty &&
-                  _selectedDay != null) {
-                setState(() {
-                  _appointments[_selectedDay!] ??= [];
-                  _appointments[_selectedDay!]!.add({
-                    'title': titleController.text,
-                    'hour': hourController.text,
-                    'status': 'pendiente',
-                  });
-                });
-                Navigator.pop(ctx);
-              }
-            },
-            child: const Text('Guardar'),
-          ),
-        ],
-      ),
+      initialTime: TimeOfDay.now(),
+      builder: (BuildContext context, Widget? child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+          child: child!,
+        );
+      },
     );
   }
 
-  void _toggleStatus(int index, String status) {
-    setState(() {
-      _selectedAppointments[index]['status'] = status;
-    });
+  // FUNCIÓN: Diálogo para agregar nueva cita (LÓGICA CORREGIDA)
+  void _addAppointment(BuildContext context) async {
+    final TextEditingController clientNameCtrl = TextEditingController();
+    TimeOfDay? selectedTime;
+
+    // 🟢 CORRECCIÓN: TODAS las variables de selección son String? (IDs)
+    String? selectedBranchId;
+    String? selectedServiceId;
+    String? selectedProfessionalId;
+
+    int serviceDuration = 0;
+    String serviceName = '';
+
+    await showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setStateInDialog) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              backgroundColor: _MAIN_BACKGROUND,
+              title: Text(
+                'Agregar cita manual',
+                style: TextStyle(
+                  color: _ACCENT_COLOR,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // 1. Nombre del Cliente
+                    TextField(
+                      controller: clientNameCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Nombre del Cliente',
+                        border: OutlineInputBorder(),
+                      ),
+                      style: TextStyle(color: _TEXT_COLOR_DARK),
+                    ),
+                    const SizedBox(height: 15),
+
+                    // 2. Selección de Sede (PRIMER FILTRO)
+                    StreamBuilder<List<Branch>>(
+                      stream: _branchService.getBranches(),
+                      builder: (context, snapshot) {
+                        final branches = snapshot.data ?? [];
+                        if (snapshot.connectionState == ConnectionState.waiting)
+                          return const LinearProgressIndicator();
+
+                        return DropdownButtonFormField<String>(
+                          value: selectedBranchId,
+                          decoration: const InputDecoration(labelText: 'Sede'),
+                          items: branches
+                              .map(
+                                (branch) => DropdownMenuItem(
+                                  value: branch.id,
+                                  child: Text(branch.name),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (val) {
+                            setStateInDialog(() {
+                              selectedBranchId = val;
+                              // Resetea dependencias inferiores
+                              selectedServiceId = null;
+                              selectedProfessionalId = null;
+                              serviceDuration = 0;
+                            });
+                          },
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 15),
+
+                    // 3. Selección de Servicio (DEPENDE DE LA SEDE)
+                    if (selectedBranchId != null)
+                      StreamBuilder<List<SalonService>>(
+                        stream: _servService.getServicesByBranch(
+                          selectedBranchId!,
+                        ),
+                        builder: (context, snapshot) {
+                          final services = snapshot.data ?? [];
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting)
+                            return const LinearProgressIndicator();
+
+                          if (services.isEmpty) {
+                            return const Text(
+                              "No hay servicios en esta sede.",
+                              style: TextStyle(color: Colors.red),
+                            );
+                          }
+                          return DropdownButtonFormField<String>(
+                            value: selectedServiceId,
+                            decoration: const InputDecoration(
+                              labelText: 'Servicio',
+                            ),
+                            items: services
+                                .map(
+                                  (service) => DropdownMenuItem(
+                                    value: service.id,
+                                    child: Text(
+                                      '${service.name} (${service.duration} min)',
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (val) {
+                              final selected = services.firstWhere(
+                                (s) => s.id == val,
+                              );
+                              setStateInDialog(() {
+                                selectedServiceId = val;
+                                serviceDuration = selected.duration;
+                                serviceName = selected.name;
+                                // Resetea el profesional
+                                selectedProfessionalId = null;
+                              });
+                            },
+                          );
+                        },
+                      ),
+                    const SizedBox(height: 15),
+
+                    // 4. Selección de Profesional (DEPENDE DE SEDE Y SERVICIO)
+                    if (selectedBranchId != null && selectedServiceId != null)
+                      StreamBuilder<List<Professional>>(
+                        // Carga profesionales de la sede
+                        stream: _profService.getProfessionals(
+                          branchId: selectedBranchId!,
+                        ),
+                        builder: (context, snapshot) {
+                          final professionals = snapshot.data ?? [];
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting)
+                            return const LinearProgressIndicator();
+
+                          // FILTRADO: Solo profesionales que ofrecen el Servicio seleccionado
+                          final filteredPros = professionals
+                              .where(
+                                (p) => p.services.contains(selectedServiceId),
+                              )
+                              .toList();
+
+                          if (filteredPros.isEmpty) {
+                            return const Text(
+                              "Ningún profesional ofrece este servicio.",
+                              style: TextStyle(color: Colors.red),
+                            );
+                          }
+
+                          // 🟢 CORRECCIÓN: Tipo String y valor = ID
+                          return DropdownButtonFormField<String>(
+                            value:
+                                selectedProfessionalId, // ⬅️ Variable de estado de tipo String
+                            decoration: const InputDecoration(
+                              labelText: 'Profesional',
+                            ),
+                            items: filteredPros
+                                .map(
+                                  (pro) => DropdownMenuItem<String>(
+                                    value: pro
+                                        .id, // ⬅️ Usamos el ID (String) como valor
+                                    child: Text(pro.name),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (val) {
+                              setStateInDialog(() {
+                                selectedProfessionalId =
+                                    val; // Almacena el ID (String)
+                              });
+                            },
+                          );
+                        },
+                      ),
+                    const SizedBox(height: 15),
+
+                    // 5. Selector de Hora (24h)
+                    InkWell(
+                      onTap: () async {
+                        final TimeOfDay? time = await _selectTime(context);
+                        setStateInDialog(() {
+                          selectedTime = time;
+                        });
+                      },
+                      child: InputDecorator(
+                        decoration: const InputDecoration(
+                          labelText: 'Hora de la Cita (24h)',
+                          border: OutlineInputBorder(),
+                        ),
+                        child: Text(
+                          selectedTime == null
+                              ? 'Seleccionar hora'
+                              : selectedTime!.format(context),
+                          style: TextStyle(color: _TEXT_COLOR_DARK),
+                        ),
+                      ),
+                    ),
+
+                    // 6. Muestra la duración
+                    if (serviceDuration > 0 && selectedTime != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: Text(
+                          'Duración: ${serviceDuration} min. Fin: ${selectedTime!.replacing(minute: selectedTime!.minute + serviceDuration).format(context)}',
+                          style: TextStyle(
+                            color: _ACCENT_COLOR,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text(
+                    'Cancelar',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _ACCENT_COLOR,
+                    foregroundColor: _TEXT_COLOR_LIGHT,
+                  ),
+                  // Valida todos los campos necesarios para guardar
+                  onPressed:
+                      selectedTime != null &&
+                          clientNameCtrl.text.isNotEmpty &&
+                          selectedBranchId != null &&
+                          selectedServiceId != null &&
+                          selectedProfessionalId != null
+                      ? () async {
+                          final selectedDate = _selectedDay ?? _focusedDay;
+                          final appointmentDateTime = DateTime(
+                            selectedDate.year,
+                            selectedDate.month,
+                            selectedDate.day,
+                            selectedTime!.hour,
+                            selectedTime!.minute,
+                          );
+
+                          final newAppointment = Appointment(
+                            id: '',
+                            clientName: clientNameCtrl.text,
+                            branchId: selectedBranchId!,
+                            serviceId: selectedServiceId!,
+                            professionalId:
+                                selectedProfessionalId!, // Usar el ID (String)
+                            service: serviceName,
+                            date: appointmentDateTime,
+                            status: 'pending',
+                          );
+
+                          await _appointmentsService.addAppointment(
+                            newAppointment,
+                          );
+
+                          if (mounted) Navigator.pop(ctx);
+                        }
+                      : null,
+                  child: const Text('Guardar'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   @override
@@ -101,15 +359,17 @@ class _AgendaScreenState extends State<AgendaScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final timeFormat = DateFormat('hh:mm a');
+
     return Scaffold(
-      backgroundColor: const Color(0xFFEEEEEE),
+      backgroundColor: _MAIN_BACKGROUND, // Blanco
       appBar: AppBar(
-        backgroundColor: const Color(0xFF222831),
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: const Text(
+        backgroundColor: _APPBAR_BACKGROUND, // Gris Claro
+        elevation: 1,
+        iconTheme: IconThemeData(color: _PRIMARY_DARK),
+        title: Text(
           'Agenda',
-          style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+          style: TextStyle(fontWeight: FontWeight.bold, color: _PRIMARY_DARK),
         ),
         centerTitle: true,
       ),
@@ -118,7 +378,7 @@ class _AgendaScreenState extends State<AgendaScreen> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: const BoxDecoration(
-              color: Colors.white,
+              color: _MAIN_BACKGROUND,
               boxShadow: [
                 BoxShadow(
                   color: Colors.black12,
@@ -138,102 +398,179 @@ class _AgendaScreenState extends State<AgendaScreen> {
                   _focusedDay = focusedDay;
                 });
               },
-              calendarStyle: const CalendarStyle(
+              calendarStyle: CalendarStyle(
                 selectedDecoration: BoxDecoration(
-                  color: Color(0xFF0092CA),
+                  color: _ACCENT_COLOR, // Azul Acento
                   shape: BoxShape.circle,
                 ),
                 todayDecoration: BoxDecoration(
-                  color: Color(0xFF222831),
+                  color: _CARD_BACKGROUND.withOpacity(
+                    0.8,
+                  ), // Azul Acero más suave
                   shape: BoxShape.circle,
                 ),
-                weekendTextStyle: TextStyle(color: Colors.redAccent),
+                weekendTextStyle: TextStyle(color: _PRIMARY_DARK),
+                defaultTextStyle: TextStyle(color: _PRIMARY_DARK),
+                outsideTextStyle: TextStyle(color: Colors.grey.shade400),
               ),
-              headerStyle: const HeaderStyle(
+              headerStyle: HeaderStyle(
                 formatButtonVisible: false,
                 titleCentered: true,
                 titleTextStyle: TextStyle(
                   fontWeight: FontWeight.bold,
                   fontSize: 18,
+                  color: _PRIMARY_DARK,
+                ),
+                leftChevronIcon: Icon(Icons.chevron_left, color: _PRIMARY_DARK),
+                rightChevronIcon: Icon(
+                  Icons.chevron_right,
+                  color: _PRIMARY_DARK,
                 ),
               ),
             ),
           ),
           Expanded(
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              child: _selectedAppointments.isEmpty
-                  ? const Center(
-                      child: Text(
-                        'No hay citas para este día',
-                        style: TextStyle(color: Colors.grey, fontSize: 16),
+            child: StreamBuilder<List<Appointment>>(
+              stream: _selectedAppointmentsStream,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text(
+                      'Error al cargar citas: ${snapshot.error}',
+                      style: const TextStyle(color: Colors.red),
+                    ),
+                  );
+                }
+
+                final appointments = snapshot.data ?? [];
+
+                if (appointments.isEmpty) {
+                  return Center(
+                    child: Text(
+                      'No hay citas para ${DateFormat('dd MMMM yyyy').format(_selectedDay!)}',
+                      style: TextStyle(color: Colors.grey, fontSize: 16),
+                    ),
+                  );
+                }
+
+                appointments.sort((a, b) => a.date.compareTo(b.date));
+
+                return ListView.builder(
+                  itemCount: appointments.length,
+                  itemBuilder: (context, index) {
+                    final appointment = appointments[index];
+                    final status = appointment.status;
+
+                    Color statusColor;
+                    IconData icon;
+                    String statusText;
+
+                    if (status == 'confirmed') {
+                      statusColor = Colors.green.shade600;
+                      icon = Icons.check_circle;
+                      statusText = 'Confirmada';
+                    } else if (status == 'cancelled') {
+                      statusColor = Colors.red.shade600;
+                      icon = Icons.cancel;
+                      statusText = 'Cancelada';
+                    } else {
+                      // pending
+                      statusColor =
+                          Colors.orange.shade400; // Naranja para pendiente
+                      icon = Icons.schedule;
+                      statusText = 'Pendiente';
+                    }
+
+                    return Card(
+                      color: _CARD_BACKGROUND, // Azul Acero
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
                       ),
-                    )
-                  : ListView.builder(
-                      itemCount: _selectedAppointments.length,
-                      itemBuilder: (context, index) {
-                        final appointment = _selectedAppointments[index];
-                        final status = appointment['status'];
-
-                        Color statusColor;
-                        IconData icon;
-
-                        if (status == 'confirmada') {
-                          statusColor = Colors.green;
-                          icon = Icons.check_circle;
-                        } else if (status == 'cancelada') {
-                          statusColor = Colors.red;
-                          icon = Icons.cancel;
-                        } else {
-                          statusColor = Colors.orange;
-                          icon = Icons.schedule;
-                        }
-
-                        return Card(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
+                      elevation: 3,
+                      margin: const EdgeInsets.symmetric(
+                        vertical: 8,
+                        horizontal: 16,
+                      ),
+                      child: ListTile(
+                        leading: Icon(icon, color: statusColor, size: 32),
+                        title: Text(
+                          appointment.clientName,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                            color: _TEXT_COLOR_LIGHT, // Texto Blanco
                           ),
-                          elevation: 3,
-                          margin: const EdgeInsets.symmetric(vertical: 8),
-                          child: ListTile(
-                            leading: Icon(icon, color: statusColor, size: 32),
-                            title: Text(
-                              appointment['title'],
-                              style: const TextStyle(
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${timeFormat.format(appointment.date)} - ${appointment.service}',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: _APPBAR_BACKGROUND,
+                              ), // Gris claro
+                            ),
+                            Text(
+                              'Estado: $statusText',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: statusColor,
                                 fontWeight: FontWeight.bold,
-                                fontSize: 16,
                               ),
                             ),
-                            subtitle: Text(
-                              appointment['hour'],
-                              style: const TextStyle(fontSize: 14),
+                          ],
+                        ),
+                        trailing: PopupMenuButton<String>(
+                          icon: Icon(
+                            Icons.more_vert,
+                            color: _TEXT_COLOR_LIGHT,
+                          ), // Icono blanco
+                          onSelected: (value) => _updateAppointmentStatus(
+                            appointment.id,
+                            value,
+                          ), // Llama al servicio
+                          itemBuilder: (context) => [
+                            const PopupMenuItem(
+                              value: 'confirmed',
+                              child: Text(
+                                'Confirmar',
+                                style: TextStyle(color: Colors.green),
+                              ),
                             ),
-                            trailing: PopupMenuButton<String>(
-                              onSelected: (value) =>
-                                  _toggleStatus(index, value),
-                              itemBuilder: (context) => [
-                                const PopupMenuItem(
-                                  value: 'confirmada',
-                                  child: Text('Confirmar'),
-                                ),
-                                const PopupMenuItem(
-                                  value: 'cancelada',
-                                  child: Text('Cancelar'),
-                                ),
-                              ],
+                            const PopupMenuItem(
+                              value: 'cancelled',
+                              child: Text(
+                                'Declinar/Cancelar',
+                                style: TextStyle(color: Colors.red),
+                              ),
                             ),
-                          ),
-                        );
-                      },
-                    ),
+                            const PopupMenuItem(
+                              value: 'pending',
+                              child: Text(
+                                'Marcar como Pendiente',
+                                style: TextStyle(color: Colors.orange),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
             ),
           ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        backgroundColor: Color(0xFF0092CA),
+        backgroundColor: _ACCENT_COLOR, // Azul Acento
         onPressed: () => _addAppointment(context),
-        child: const Icon(Icons.add, size: 28),
+        child: const Icon(Icons.add, size: 28, color: _TEXT_COLOR_LIGHT),
       ),
     );
   }
