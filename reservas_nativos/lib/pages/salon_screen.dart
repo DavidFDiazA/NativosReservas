@@ -150,6 +150,8 @@ class _SalonScreenState extends State<SalonScreen> {
                   ownerId: '',
                 );
 
+                final savedBranchId = await _branchService.addBranch(newBranch);
+
                 branchNameCtrl.clear();
                 branchAddressCtrl.clear();
                 branchPhoneCtrl.clear();
