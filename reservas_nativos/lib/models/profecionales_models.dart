@@ -49,4 +49,18 @@ class Professional {
       branchId: data['branchId'] ?? '',
     );
   }
+
+  // ------------------------------------------------------------------
+  // 🚀 MÓDULO AGREGADO PARA CORREGIR EL ERROR DEL DROPDOWN
+  // Dos profesionales son iguales si tienen el mismo 'id'.
+  // ------------------------------------------------------------------
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is Professional && other.id == id;
+  }
+
+  @override
+  int get hashCode => id.hashCode;
+  // ------------------------------------------------------------------
 }

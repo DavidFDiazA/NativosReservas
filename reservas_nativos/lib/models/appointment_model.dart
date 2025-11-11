@@ -7,6 +7,8 @@ class Appointment {
   final String branchId;
   final String professionalId;
   final String serviceId;
+  final String userId;
+
   // Campos existentes
   final String service; // Nombre del servicio
   final DateTime date;
@@ -22,6 +24,7 @@ class Appointment {
     required this.service,
     required this.date,
     required this.status,
+    required this.userId,
     this.notes,
   });
 
@@ -36,6 +39,7 @@ class Appointment {
       date: (data['date'] as Timestamp).toDate(),
       status: data['status'],
       notes: data['notes'],
+      userId: data['userId'] ?? '',
     );
   }
 

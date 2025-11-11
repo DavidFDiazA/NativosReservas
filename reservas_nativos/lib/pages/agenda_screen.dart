@@ -153,6 +153,7 @@ class _AgendaScreenState extends State<AgendaScreen> {
                     const SizedBox(height: 15),
 
                     // 3. Selección de Profesional (Depende de la Sede)
+                    // 3. Selección de Profesional (Depende de la Sede)
                     if (selectedBranchId != null)
                       StreamBuilder<List<Professional>>(
                         stream: _profService.getProfessionals(
@@ -325,11 +326,29 @@ class _AgendaScreenState extends State<AgendaScreen> {
                             status: 'pending',
                           );
 
-                          await _appointmentsService.addAppointment(
-                            newAppointment,
-                          );
-
-                          if (mounted) Navigator.pop(ctx);
+                          // 🚀 MODIFICACIÓN: Agregando try-catch para manejar el error de unicidad
+                          try {
+                            await _appointmentsService.addAppointment(
+                              newAppointment,
+                            );
+                            // Si es exitoso, cerrar el diálogo.
+                            if (mounted) Navigator.pop(ctx);
+                          } catch (e) {
+                            // Si falla la unicidad, mostrar un SnackBar.
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                // Limpiamos 'Exception: ' del mensaje de error
+                                SnackBar(
+                                  content: Text(
+                                    e.toString().replaceFirst(
+                                      'Exception: ',
+                                      '',
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
+                          }
                         }
                       : null,
                   child: const Text('Guardar'),
