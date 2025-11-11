@@ -39,7 +39,7 @@ class SalonServicesService {
     }
   }
 
-  // 🟢 MÉTODO CORREGIDO: Obtener servicios filtrados por Sede (Branch)
+  // 🟢 Método: Obtener servicios filtrados por Sede
   Stream<List<SalonService>> getServicesByBranch(String branchId) {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) {
@@ -73,51 +73,7 @@ class SalonServicesService {
         );
   }
 
-  // Métodos de servicio restantes...
-  // (getServices, getServicesByProfessional, updateService, deleteService)
-  // ... (mantén estos métodos como los tenías en tu archivo original)
-
-  // ✅ Obtener servicios del usuario autenticado (Todos)
-  Stream<List<SalonService>> getServices() {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) {
-      print('⚠️ No hay usuario autenticado. Retornando Stream vacío.');
-      return const Stream.empty();
-    }
-
-    return _servicesRef
-        .where('companyId', isEqualTo: currentUser.uid)
-        .orderBy('createdAt', descending: true)
-        .snapshots()
-        .map((snapshot) {
-          print(
-            '📦 SNAPSHOT SERVICIOS (${currentUser.uid}): ${snapshot.docs.length} encontrados.',
-          );
-
-          return snapshot.docs.map((doc) {
-            try {
-              return SalonService.fromMap(
-                doc.id,
-                doc.data() as Map<String, dynamic>,
-              );
-            } catch (e, st) {
-              print('❌ Error al mapear servicio (${doc.id}): $e');
-              print(st);
-              return SalonService(
-                id: doc.id,
-                name: 'Error',
-                price: 0,
-                duration: 0,
-                professionalId: '',
-                companyId: '',
-                branchId: '',
-              );
-            }
-          }).toList();
-        });
-  }
-
-  // ✅ Obtener servicios por profesional (filtrados por empresa)
+  // 🟢 Método clave: Obtener servicios por profesional (USADO EN AGENDASCREEN)
   Stream<List<SalonService>> getServicesByProfessional(String professionalId) {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) {
@@ -151,15 +107,42 @@ class SalonServicesService {
         );
   }
 
-  // ✅ Actualizar servicio
-  Future<void> updateService(String id, Map<String, dynamic> data) async {
-    await _servicesRef.doc(id).update(data);
-    print('🛠 Servicio actualizado: $id');
+  // Métodos restantes (getServices, updateService, deleteService) se mantienen.
+  Stream<List<SalonService>> getServices() {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) return const Stream.empty();
+
+    return _servicesRef
+        .where('companyId', isEqualTo: currentUser.uid)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map(
+          (snapshot) => snapshot.docs.map((doc) {
+            try {
+              return SalonService.fromMap(
+                doc.id,
+                doc.data() as Map<String, dynamic>,
+              );
+            } catch (e) {
+              return SalonService(
+                id: doc.id,
+                name: 'Error',
+                price: 0,
+                duration: 0,
+                professionalId: '',
+                companyId: '',
+                branchId: '',
+              );
+            }
+          }).toList(),
+        );
   }
 
-  // ✅ Eliminar servicio
+  Future<void> updateService(String id, Map<String, dynamic> data) async {
+    await _servicesRef.doc(id).update(data);
+  }
+
   Future<void> deleteService(String id) async {
     await _servicesRef.doc(id).delete();
-    print('🗑 Servicio eliminado: $id');
   }
 }

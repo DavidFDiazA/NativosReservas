@@ -34,14 +34,6 @@ class ProfessionalsService {
   }
 
   // ✅ Obtener profesionales del usuario autenticado
-  // En lib/services/profecinal_service.dart
-
-  // En lib/services/profecinal_service.dart
-
-  // Em lib/services/profecinal_service.dart
-
-  // En lib/services/profecinal_service.dart
-
   Stream<List<Professional>> getProfessionals({String? branchId}) {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) {
@@ -54,16 +46,16 @@ class ProfessionalsService {
 
     // 🔍 LOG EXPLICITO (INICIO)
     print('--- INICIANDO CONSULTA DE PROFESIONALES ---');
-    print('   - Buscando por Dueño (companyId): $ownerId');
+    print('   - Buscando por Dueño (companyId): $ownerId');
 
     // 2. Aplicar el filtro opcional de sede (branchId)
     if (branchId != null && branchId.isNotEmpty) {
       query = query.where('branchId', isEqualTo: branchId);
       print(
-        '   - Y por Sede (branchId): $branchId',
+        '   - Y por Sede (branchId): $branchId',
       ); // ⬅️ ID de Sede usado en el filtro
     } else {
-      print('   - SIN FILTRO POR SEDE (branchId).');
+      print('   - SIN FILTRO POR SEDE (branchId).');
     }
 
     // 3. Ejecutar la consulta sin ordenación (para evitar el índice de 3 campos)
@@ -109,11 +101,29 @@ class ProfessionalsService {
     print('🗑 Profesional eliminado: $id');
   }
 
-  // ✅ Obtener un profesional específico
-  Future<Professional?> getProfessionalById(String id) async {
-    final doc = await _professionalsRef.doc(id).get();
-    if (!doc.exists) return null;
+  // ✅ Obtener un profesional específico (CORREGIDO para aceptar branchId)
+  Future<Professional?> getProfessionalById(
+    String id, {
+    String? branchId, // ⬅️ Nuevo parámetro nombrado opcional
+  }) async {
+    // 1. Iniciar la consulta filtrando por el campo 'id' dentro del documento.
+    Query query = _professionalsRef.where('id', isEqualTo: id);
 
-    return Professional.fromMap(id, doc.data() as Map<String, dynamic>);
+    // 2. Aplicar el filtro opcional de sede (branchId) si está presente
+    if (branchId != null && branchId.isNotEmpty) {
+      query = query.where('branchId', isEqualTo: branchId);
+    }
+
+    // 3. Obtener el resultado (solo esperamos un resultado y limitamos la consulta)
+    final snapshot = await query.limit(1).get();
+
+    if (snapshot.docs.isEmpty) {
+      // Si no se encuentra, o no cumple ambos filtros, retorna null
+      return null;
+    }
+
+    // 4. Mapear y retornar el primer resultado
+    final doc = snapshot.docs.first;
+    return Professional.fromMap(doc.id, doc.data() as Map<String, dynamic>);
   }
 }

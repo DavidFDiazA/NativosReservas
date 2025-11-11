@@ -73,16 +73,17 @@ class _AgendaScreenState extends State<AgendaScreen> {
     );
   }
 
-  // FUNCIÓN: Diálogo para agregar nueva cita (LÓGICA CORREGIDA)
+  // FUNCIÓN: Diálogo para agregar nueva cita (LÓGICA PRINCIPAL CORREGIDA)
   void _addAppointment(BuildContext context) async {
     final TextEditingController clientNameCtrl = TextEditingController();
     TimeOfDay? selectedTime;
 
-    // 🟢 CORRECCIÓN: TODAS las variables de selección son String? (IDs)
+    // Variables de estado del formulario dentro del diálogo
     String? selectedBranchId;
-    String? selectedServiceId;
-    String? selectedProfessionalId;
+    // Ahora guardamos el OBJETO Professional
+    Professional? selectedProfessional;
 
+    String? selectedServiceId;
     int serviceDuration = 0;
     String serviceName = '';
 
@@ -118,7 +119,7 @@ class _AgendaScreenState extends State<AgendaScreen> {
                     ),
                     const SizedBox(height: 15),
 
-                    // 2. Selección de Sede (PRIMER FILTRO)
+                    // 2. Selección de Sede
                     StreamBuilder<List<Branch>>(
                       stream: _branchService.getBranches(),
                       builder: (context, snapshot) {
@@ -140,9 +141,9 @@ class _AgendaScreenState extends State<AgendaScreen> {
                           onChanged: (val) {
                             setStateInDialog(() {
                               selectedBranchId = val;
-                              // Resetea dependencias inferiores
+                              // Resetea dependencias
+                              selectedProfessional = null;
                               selectedServiceId = null;
-                              selectedProfessionalId = null;
                               serviceDuration = 0;
                             });
                           },
@@ -151,11 +152,58 @@ class _AgendaScreenState extends State<AgendaScreen> {
                     ),
                     const SizedBox(height: 15),
 
-                    // 3. Selección de Servicio (DEPENDE DE LA SEDE)
+                    // 3. Selección de Profesional (Depende de la Sede)
                     if (selectedBranchId != null)
+                      StreamBuilder<List<Professional>>(
+                        stream: _profService.getProfessionals(
+                          branchId: selectedBranchId!,
+                        ),
+                        builder: (context, snapshot) {
+                          final professionals = snapshot.data ?? [];
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting)
+                            return const LinearProgressIndicator();
+
+                          if (professionals.isEmpty) {
+                            return const Text(
+                              "No hay profesionales disponibles en esta sede.",
+                              style: TextStyle(color: Colors.red),
+                            );
+                          }
+
+                          return DropdownButtonFormField<Professional>(
+                            value: selectedProfessional,
+                            decoration: const InputDecoration(
+                              labelText: 'Profesional',
+                            ),
+                            items: professionals
+                                .map(
+                                  (pro) => DropdownMenuItem(
+                                    value: pro,
+                                    child: Text(pro.name),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (val) {
+                              setStateInDialog(() {
+                                selectedProfessional = val;
+                                // Resetea el Servicio al cambiar el Profesional
+                                selectedServiceId = null;
+                                serviceDuration = 0;
+                                serviceName = '';
+                              });
+                            },
+                          );
+                        },
+                      ),
+                    const SizedBox(height: 15),
+
+                    // 4. Selección de Servicio (Depende del Profesional seleccionado)
+                    if (selectedProfessional != null)
                       StreamBuilder<List<SalonService>>(
-                        stream: _servService.getServicesByBranch(
-                          selectedBranchId!,
+                        // ⬅️ CORRECCIÓN: Filtra servicios por el ID del Profesional
+                        stream: _servService.getServicesByProfessional(
+                          selectedProfessional!.id,
                         ),
                         builder: (context, snapshot) {
                           final services = snapshot.data ?? [];
@@ -165,7 +213,7 @@ class _AgendaScreenState extends State<AgendaScreen> {
 
                           if (services.isEmpty) {
                             return const Text(
-                              "No hay servicios en esta sede.",
+                              "El profesional no tiene servicios asignados.",
                               style: TextStyle(color: Colors.red),
                             );
                           }
@@ -192,62 +240,6 @@ class _AgendaScreenState extends State<AgendaScreen> {
                                 selectedServiceId = val;
                                 serviceDuration = selected.duration;
                                 serviceName = selected.name;
-                                // Resetea el profesional
-                                selectedProfessionalId = null;
-                              });
-                            },
-                          );
-                        },
-                      ),
-                    const SizedBox(height: 15),
-
-                    // 4. Selección de Profesional (DEPENDE DE SEDE Y SERVICIO)
-                    if (selectedBranchId != null && selectedServiceId != null)
-                      StreamBuilder<List<Professional>>(
-                        // Carga profesionales de la sede
-                        stream: _profService.getProfessionals(
-                          branchId: selectedBranchId!,
-                        ),
-                        builder: (context, snapshot) {
-                          final professionals = snapshot.data ?? [];
-                          if (snapshot.connectionState ==
-                              ConnectionState.waiting)
-                            return const LinearProgressIndicator();
-
-                          // FILTRADO: Solo profesionales que ofrecen el Servicio seleccionado
-                          final filteredPros = professionals
-                              .where(
-                                (p) => p.services.contains(selectedServiceId),
-                              )
-                              .toList();
-
-                          if (filteredPros.isEmpty) {
-                            return const Text(
-                              "Ningún profesional ofrece este servicio.",
-                              style: TextStyle(color: Colors.red),
-                            );
-                          }
-
-                          // 🟢 CORRECCIÓN: Tipo String y valor = ID
-                          return DropdownButtonFormField<String>(
-                            value:
-                                selectedProfessionalId, // ⬅️ Variable de estado de tipo String
-                            decoration: const InputDecoration(
-                              labelText: 'Profesional',
-                            ),
-                            items: filteredPros
-                                .map(
-                                  (pro) => DropdownMenuItem<String>(
-                                    value: pro
-                                        .id, // ⬅️ Usamos el ID (String) como valor
-                                    child: Text(pro.name),
-                                  ),
-                                )
-                                .toList(),
-                            onChanged: (val) {
-                              setStateInDialog(() {
-                                selectedProfessionalId =
-                                    val; // Almacena el ID (String)
                               });
                             },
                           );
@@ -305,13 +297,12 @@ class _AgendaScreenState extends State<AgendaScreen> {
                     backgroundColor: _ACCENT_COLOR,
                     foregroundColor: _TEXT_COLOR_LIGHT,
                   ),
-                  // Valida todos los campos necesarios para guardar
                   onPressed:
                       selectedTime != null &&
                           clientNameCtrl.text.isNotEmpty &&
                           selectedBranchId != null &&
                           selectedServiceId != null &&
-                          selectedProfessionalId != null
+                          selectedProfessional != null
                       ? () async {
                           final selectedDate = _selectedDay ?? _focusedDay;
                           final appointmentDateTime = DateTime(
@@ -327,8 +318,8 @@ class _AgendaScreenState extends State<AgendaScreen> {
                             clientName: clientNameCtrl.text,
                             branchId: selectedBranchId!,
                             serviceId: selectedServiceId!,
-                            professionalId:
-                                selectedProfessionalId!, // Usar el ID (String)
+                            professionalId: selectedProfessional!
+                                .id, // Usar el ID del objeto
                             service: serviceName,
                             date: appointmentDateTime,
                             status: 'pending',
